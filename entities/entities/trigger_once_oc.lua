@@ -7,6 +7,22 @@ ENT.Base = "base_entity"
 ENT.IsMultiple = false
 ENT.touchAmount = 0
 
+-- Trigger spawnflags: GarrysMod/bin/base.fgd ("Trigger" and trigger_multiple),
+-- which Obsidian.fgd's point_trigger and trigger_once_oc share.
+ENT.Flags = {
+	CLIENTS                 = 0x0001,
+	NPCS                    = 0x0002,
+	PUSHABLES               = 0x0004,
+	PHYSICS_OBJECTS         = 0x0008,
+	ALLY_NPCS_ONLY          = 0x0010,
+	CLIENTS_IN_VEHICLES     = 0x0020,
+	EVERYTHING              = 0x0040,
+	CLIENTS_NOT_IN_VEHICLES = 0x0200,
+	NPCS_IN_VEHICLES        = 0x0800,
+	NO_BOTS                 = 0x1000,
+}
+local FLAGS = ENT.Flags
+
 function ENT:SetupDataTables()
 	self:NetworkVar("String", 0, "FilterEnt")
 	self:NetworkVar("Bool", 0, "Disabled")
@@ -14,7 +30,7 @@ function ENT:SetupDataTables()
 end
 
 local function checkFilter(self, ent)
-	if self:HasSpawnFlags(4096) and ent:IsPlayer() and ent:IsBot() then
+	if self:HasSpawnFlags(FLAGS.NO_BOTS) and ent:IsPlayer() and ent:IsBot() then
 		return false
 	end
 	
@@ -28,15 +44,15 @@ local function checkFilter(self, ent)
 		end
 	end
 
-	if self:HasSpawnFlags(64) then
+	if self:HasSpawnFlags(FLAGS.EVERYTHING) then
 		return true
 	end
 
-	if ent:GetClass() == "func_pushable" and not self:HasSpawnFlags(4) then
+	if ent:GetClass() == "func_pushable" and not self:HasSpawnFlags(FLAGS.PUSHABLES) then
 		return false
 	end
 
-	if self:HasSpawnFlags(16) then
+	if self:HasSpawnFlags(FLAGS.ALLY_NPCS_ONLY) then
 		if not ent:IsNPC() then
 			return false
 		end
@@ -48,7 +64,7 @@ local function checkFilter(self, ent)
 		return true
 	end
 
-	if self:HasSpawnFlags(32) then
+	if self:HasSpawnFlags(FLAGS.CLIENTS_IN_VEHICLES) then
 		if ent:IsPlayer() and ent:InVehicle() then
 			return true
 		end
@@ -64,7 +80,7 @@ local function checkFilter(self, ent)
 		return false
 	end
 
-	if self:HasSpawnFlags(512) then
+	if self:HasSpawnFlags(FLAGS.CLIENTS_NOT_IN_VEHICLES) then
 		if not ent:IsPlayer() then
 			return false
 		end
@@ -76,7 +92,7 @@ local function checkFilter(self, ent)
 		return true
 	end
 	
-	if self:HasSpawnFlags(2048) then
+	if self:HasSpawnFlags(FLAGS.NPCS_IN_VEHICLES) then
 		if not ent:IsVehicle() then
 			return false
 		end
@@ -88,11 +104,11 @@ local function checkFilter(self, ent)
 		return false
 	end
 	
-	if ent:IsPlayer() and not self:HasSpawnFlags(1) then
+	if ent:IsPlayer() and not self:HasSpawnFlags(FLAGS.CLIENTS) then
 		return false
 	end
 	
-	if ent:IsNPC() and not self:HasSpawnFlags(2) then
+	if ent:IsNPC() and not self:HasSpawnFlags(FLAGS.NPCS) then
 		return false
 	end
 	
@@ -103,6 +119,17 @@ end
 function ENT:PassesTriggerFilters(ent)
 	return true
 end
+
+-- for entities built on this one that find their own touchers
+function ENT:CheckFilter(ent)
+	return checkFilter(self, ent)
+end
+
+-- Called for an entity that passed the filters and began touching, and for any
+-- entity that stopped touching (whether or not it was counted, so a subclass
+-- must tolerate one it never saw). Subclasses override them.
+function ENT:OnTouchStart(ent) end
+function ENT:OnTouchEnd(ent) end
 
 function ENT:Initialize()
 	if SERVER then
@@ -138,6 +165,7 @@ function ENT:StartTouch(ent)
 	if not checkFilter(self, ent) then return end
 	self.touchAmount = self.touchAmount + 1
 
+	self:OnTouchStart(ent)
 	self:CallAllOutputs("OnStartTouch", ent)
 	if self.touchAmount == 1 then
 		self:CallAllOutputs("OnStartTouchAll", ent)
@@ -145,6 +173,8 @@ function ENT:StartTouch(ent)
 end
 
 function ENT:EndTouch(ent)
+	self:OnTouchEnd(ent)
+
 	if self:GetDisabled() then return end
 	if not checkFilter(self, ent) then return end
 	self.touchAmount = self.touchAmount - 1

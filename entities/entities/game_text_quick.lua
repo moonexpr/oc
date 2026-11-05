@@ -3,6 +3,8 @@ AddCSLuaFile()
 ENT.Type = "point"
 ENT.Base = "base_anim"
 
+local ALL_PLAYERS = 0x1
+
 ENT.PrintName = "Game Text Quick"
 ENT.Spawnable = false
 
@@ -27,11 +29,11 @@ function ENT:SetupDataTables()
 	self:SetChannel(1)
 end
 
--- Spawnflag 1 is "All Players", as in Valve's game_text. Without it the text is
+-- GarrysMod/bin/base.fgd, game_text: 0x1 is "All Players". Without it the text is
 -- for the activator alone, and a map often fires it from a relay, prop or world
 -- (no player to show it to), when there is nothing to send.
 function ENT:Display(activator)
-	local toAll = self:HasSpawnFlags(1)
+	local toAll = self:HasSpawnFlags(ALL_PLAYERS)
 
 	if not toAll and not (IsValid(activator) and activator:IsPlayer()) then return end
 
